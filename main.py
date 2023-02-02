@@ -1,129 +1,119 @@
-
-# ----------------------------------- #
-# imports
-
+import time
 import os
+import selenium
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.remote_connection import LOGGER
+
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
 import requests
-from bs4 import BeautifulSoup
+
+
+options = webdriver.ChromeOptions()
+# options.add_argument(argument='--headless')
+options.add_experimental_option("excludeSwitches", ["enable-logging"])
+
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 # ----------------------------------- #
-# pre-setup
+# pinterest functions
 
-def read_file_contents(fname):
-    """Read the file contents"""
-    with open(fname, 'r') as f:
-        data = f.read()
-    return data
+TARGETS = ['', 'hCL','kVc','L4E','MIw']
+BOARD_TARGET = ['', 'Wk9', 'xQ4', 'CCY', 'S9z', 'DUt', 'kVc', 'agv', 'LIa']
+BOARD_A_PARENT = ['', 'zI7', 'iyn', 'Hsu']
+
+def download_image(link, website_link):
+    """Save a link to an image file"""
+    path = os.path.join('assets', website_link.strip('/').split('/')[-1] + '.' + link.split('/')[-1].split('.')[-1])
+    if os.path.exists(path):  return print("Already downloaded:", link)
+    print("Downloading:", link)
+    response = requests.get(link)
+    with open(path, 'wb') as f:
+        f.write(response.content)
+
+def image_from_pinterest(link):
+    """Download an image given a pinterest link"""
+    driver.get(link)
+    time.sleep(0.5)
+    element = driver.find_element(By.CSS_SELECTOR, '.'.join(TARGETS))
+    url = element.get_attribute('src')
+    download_image(url, link)
+
+def get_board_images(board, num):
+    """Download images from a pinterest board"""
+    driver.get(board)
+    # get the images
+    objs = set()
+
+    prevheight = 0
+    height = driver.execute_script("return document.body.scrollHeight")
+    
+    while len(objs) < num and height - prevheight > 100:
+        # data = list(driver.find_elements(By.CSS_SELECTOR, '.'.join(BOARD_A_PARENT)))
+        data = list(driver.find_elements(By.TAG_NAME, 'img'))
+        # print("Checking:", len(data))
+        for a in data:
+            if len(objs) >= num: break
+            # we have image -- we want to go backwards!
+            if a.get_attribute('class') == ' '.join(TARGETS[1:]):
+                # recursively find the <a> tag parent
+                parent = a
+                try:
+                    while parent.tag_name != 'a':#' '.join(BOARD_TARGET[1:]):
+                        parent = parent.find_element(By.XPATH, '..')
+                except: continue
+
+                # print(parent.tag_name, parent.get_attribute('class'))
+                # get the href
+                url = parent.get_attribute('href')
+                # print(url)
+                if not url: continue
+                objs.add(url)
+        print("Found:", len(objs), "images so far...")
+
+        # update height
+        print("Scrolling:", height - prevheight)
+        # scroll to bottom
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        print("Waiting 1.5 seconds for page to load -- since it is a board")
+        time.sleep(2)
+        
+        prevheight = height
+        height = driver.execute_script("return document.body.scrollHeight")
+        print("New height:", height, "Prev Height:", prevheight)
 
 
-print("FIGURE OUT A WAY TO NOT BE A BOT!!! -- check logs / stuff sent in initial ping")
-PAYLOAD = {}
-HEADERS = {
-    "cookie": read_file_contents("cookie"),
-    "accept-encoding": "gzip, deflate, br",
-    "accept-language": "en-US,en;q=0.9",
-    "cache-control": "max-age=0",
-    "referer": "https://www.pinterest.ca/",
-    "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
-    }
-
-# ----------------------------------- #
-# functions
-
-def store_soup_in_file(soup, fname):
-    """Store the soup in a file"""
-    # encoding issues solved: https://bobbyhadz.com/blog/python-unicodeencodeerror-charmap-codec-cant-encode-characters-in-position
-    enc = 'utf-8'
-    with open(fname, 'w', encoding=enc) as f:
-        data = str(soup.prettify())
-        ff = lambda o: str(o).encode(encoding=enc, errors="backslashreplace").decode(encoding=enc)
-        print(*map(ff, data), file=f, sep="")
-
-def load_soup_from_file(fname):
-    """Load the soup from a file"""
-    enc='utf-8'
-    with open(fname, 'r', encoding=enc) as f:
-        data = f.read()
-        soup = BeautifulSoup(data, 'html.parser')
-    return soup
-
-def load_soup_from_website(link):
-    """Load the soup from a website"""
-    # r = requests.get(link)
-    r = requests.request("GET", link, headers=HEADERS, data=PAYLOAD)
-    soup = BeautifulSoup(r.content, 'html.parser')
-    return soup
-
-def extract_links_from_passage(passage, prefix="https://i.pinimg.com/"):
-    """Extract links from a passage"""
-    results = []
-    index = 0
-    while index < len(passage):
-        index = passage.find(prefix, index)
-        # while within bounds --> continuous shorten string and look through
-        # 1. find end of first link
-        end = passage.find('"', index+1)
-        # 2. extract link
-        link = passage[index:end]
-        # 3. append link
-        results.append(link)
-        # check if more links
-        cc = passage.find(prefix, end)
-        # print('chekcing', index, end, '|', cc, '|', repr(passage[end:]))
-        if cc < 1: break
-        index = end + 1
-    return list(set(results))
-
-def download_image_from_link(link):
-    """Download the image from the link"""
-    fname = f"assets/{link.split('/')[-1]}"
-    if os.path.exists(fname):
-        return print(f"File already exists for: | {fname}")
-    image_data = requests.get(links[0]).content
-    save_image_bytedata(image_data, fname)
-
-def save_image_bytedata(data, fname):
-    """Save the image bytedata"""
-    with open(fname, 'wb') as f:
-        f.write(data)
-
-def download_multiple_images_from_links(links):
-    """Download multiple images from links"""
-    input("Do not use for pinterest! All the resulting files will be the same! [also low res] [enter to continue]")
-    for link in links:
-        download_image_from_link(link)
+    # bc selenium weird -- we must buffer everything before proceed to download all
+    print("Downloading:", len(objs))
+    for url in objs:
+        image_from_pinterest(url)
 
 # ----------------------------------- #
-# tests
-"""
-Outline:
-1. link --> get html source
-2. prettify beautiful soup --> string
-3. since the main image is always the first one, we can just get the first one # __ THIS IS NOT TRUE ANYMORE!!! GOTTA FIND A WAY TO PARSE
-    a. index = string.find(key) : key = 'https://i.pinimg.com/'
-    b. find up to 300 chars after the index, then parse for the first link
-4. download the image
-"""
+# scraping!
+
+running = True
+while running:
+    data = input("Enter a pinterest link: [or 'N'/'n' to exit]\n>")
+    if data.lower() == 'n':
+        running = False
+        break
+    # split to check if pin or board
+    parts = data.split('/')
+    # if 'pin' == pin, else == board
+    if parts[3] == 'pin':
+        image_from_pinterest(data)
+    else:
+        # ask for how many images to download
+        num = input("How many images to download? ['A'/'a' for all]\n>")
+        num = (10000 if num.lower() == 'a' else int(num))
+        # get the board -- all images
+        get_board_images(data, num)
 
 
-# link = 'https://www.pinterest.ca/pin/1013591459862217259/'
-link = input("Input a Pinterest link: ")
-soup = load_soup_from_website(link)
-# store_soup_in_file(soup, "assets/sample.html")
-
-# loading saved html files
-# soup = load_soup_from_file("assets/sample.html")
-pretty = soup.prettify()
-key = 'https://i.pinimg.com/'
-
-# for single image
-# index = pretty.find(key)
-# section = pretty[index:index+300 if index+300 < len(pretty) else len(pretty)-1]
-links = extract_links_from_passage(pretty, prefix=key)
-print(links[0])
-# print(links)
-download_image_from_link(links[0])
-# download_multiple_images_from_links(links)
+# ----------------------------------- #
+# end
+driver.close()
