@@ -46,6 +46,9 @@ def image_from_pinterest(link):
 def get_board_images(board, num):
     """Download images from a pinterest board"""
     driver.get(board)
+    if driver.current_url == "https://www.pinterest.ca/ideas/":
+        print("Invalid board link")
+        return
     # get the images
     objs = set()
 
@@ -79,8 +82,8 @@ def get_board_images(board, num):
         print("Scrolling:", height - prevheight)
         # scroll to bottom
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        print("Waiting 1.5 seconds for page to load -- since it is a board")
-        time.sleep(2)
+        print("Waiting 5 seconds for page to load -- since it is a board")
+        time.sleep(5)
         
         prevheight = height
         height = driver.execute_script("return document.body.scrollHeight")
@@ -94,6 +97,10 @@ def get_board_images(board, num):
 
 # ----------------------------------- #
 # scraping!
+
+# check if assets folder exists
+if not os.path.exists('assets'):
+    os.mkdir('assets')
 
 running = True
 while running:
@@ -112,6 +119,8 @@ while running:
         num = (10000 if num.lower() == 'a' else int(num))
         # get the board -- all images
         get_board_images(data, num)
+    
+    print('\n\n' + '=' * 20 + '\n\n')
 
 
 # ----------------------------------- #

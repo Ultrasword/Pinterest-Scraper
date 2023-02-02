@@ -2,3 +2,9 @@
 *.jpg
 *.jpeg
 *.gif
+
+
+build
+dist
+*.spec
+__pycache__
