@@ -2,6 +2,8 @@
 
 A simplistic scraper that downloads images given a link!
 
+### REMEMBER ONLY `PUBLIC` BOARDS WORK!!!
+
 # How To Use?
 
 ## Source code / clone the repository:
