@@ -14,7 +14,7 @@ import requests
 
 
 options = webdriver.ChromeOptions()
-# options.add_argument(argument='--headless')
+options.add_argument(argument='--headless')
 options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
